@@ -76,6 +76,8 @@ contract Crowdsale is SafeMath, ERC20 {
         Invested(receiver, weiAmount, tokenAmount, customerId);
     }
 
+
+
     function calculatePrice(uint256 weiAmount, uint256 decimals) {
     }
 
