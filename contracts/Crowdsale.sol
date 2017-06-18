@@ -76,6 +76,9 @@ contract Crowdsale is SafeMath, ERC20 {
         Invested(receiver, weiAmount, tokenAmount, customerId);
     }
 
+    function calculatePrice(uint256 weiAmount, uint256 decimals) {
+    }
+
     function finalizeCrowdfunding() external {
         if (getState() != State.Success) throw; // don't finalize unless we won
         if (finalizedCrowdfunding) throw; // can't finalize twice (so sneaky!)
