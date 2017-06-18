@@ -1,6 +1,6 @@
 pragma solidity ^0.4.8;
 
-import './ERC20.sol'; // yangfeng: 可能不需要？
+//import './ERC20.sol'; // yangfeng: 可能不需要？
 import './SafeMath.sol';
 import './MultiSigWallet.sol';
 
@@ -17,7 +17,8 @@ import './MultiSigWallet.sol';
 //    Success:      startsAt~endsAt 之间：raisedAmount>=maxFundingGoalInWei，或者endsAt 之后，raisedAmount>=minFundingGoalInWei
 //    Failure:      endsAt 之后，raisedAmount<minFundingGoalInWei
 
-contract Crowdsale is SafeMath, ERC20 {
+contract Crowdsale is SafeMath {
+//contract Crowdsale is SafeMath, ERC20 {
 
     bool public isCrowdsale = false;
     uint256 public startsAt;
@@ -67,10 +68,10 @@ contract Crowdsale is SafeMath, ERC20 {
         multiSigWallet = newWallet;
     }
 
-    function () {
+    function () payable {
         if (getState() != State.Funding) throw;
 
-        investor = msg.sender;
+        address investor = msg.sender;
         uint256 weiAmount = msg.value;
         // update investorCount, weiAmountOf, weiRaised
         if(weiAmountOf[investor] == 0) {
