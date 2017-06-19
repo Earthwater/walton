@@ -17,6 +17,19 @@ import './MultiSigWallet.sol';
 //    Success:      startsAt~endsAt 之间：raisedAmount>=maxFundingGoalInWei，或者endsAt 之后，raisedAmount>=minFundingGoalInWei
 //    Failure:      endsAt 之后，raisedAmount<minFundingGoalInWei
 
+contract Token {
+    function transfer(address to, uint256 value) returns (bool success);
+    function transferFrom(address from, address to, uint256 value) returns (bool success);
+    function approve(address spender, uint256 value) returns (bool success);
+
+    function totalSupply() constant returns (uint256 supply) {}
+    function balanceOf(address owner) constant returns (uint256 balance);
+    function allowance(address owner, address spender) constant returns (uint256 remaining);
+
+    event Transfer(address indexed from, address indexed to, uint256 value);
+    event Approval(address indexed owner, address indexed spender, uint256 value);
+}
+
 contract Crowdsale is SafeMath {
 //contract Crowdsale is SafeMath, ERC20 {
 
@@ -26,8 +39,10 @@ contract Crowdsale is SafeMath {
     uint256 public minFundingGoalInWei = 7500 * 10**18;
     uint256 public maxFundingGoalInWei = 100000 * 10**18;
 
+    Token public waltonToken;
+    address public wallet;
+    address public owner;
     mapping (address => uint256) public weiAmountOf;
-    mapping (address => uint256) public tokenAmountOf;
     uint256 public weiRaised = 0;
     uint256 public tokensSold = 0;
     uint256 public investorCount = 0;
@@ -73,14 +88,16 @@ contract Crowdsale is SafeMath {
 
         address investor = msg.sender;
         uint256 weiAmount = msg.value;
+        weiRaised = safeAdd(weiRaised, weiAmount);
+        if(weiRaised > maxFundingGoalInWei) {
+            weiAmount = safeSub(weiAmount, safeSub(˙));
+        }
         // update investorCount, weiAmountOf, weiRaised
         if(weiAmountOf[investor] == 0) {
            investorCount++; // A new investor
         }
         weiAmountOf[investor] = safeAdd(weiAmountOf[investor], weiAmount);
-        weiRaised = safeAdd(weiRaised, weiAmount);
-        // yangfeng: 是否需要考虑最后一单 ETH 超过 maxFundingGoalInWei，截取剩余部分返还
-        if(weiRefunded > maxFundingGoalInWei) throw;
+
         Invested(investor, weiAmount);
     }
 
