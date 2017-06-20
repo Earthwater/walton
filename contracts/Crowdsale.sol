@@ -9,7 +9,7 @@ import './MultiSigWallet.sol';
 // 1，合约创建时，设置开始时间，结束时间，最高ETH目标，最低ETH目标；
 // 2，众筹进行时，投资者向合约地址发送 ETH，触发合约把发送者地址和 ETH 记录到 weiAmountOf，供投资者查询，以确定投资成功
 //    当接收最后一笔达到最高目标时，退回剩余 ETH 给投资者；
-// 3，众筹成功，手动执行 finalizeCrowdfunding()，把合约帐户 ETH 一次性转入 multiSigWallet
+// 3，众筹成功，手动执行 finalizeCrowdfunding()，把合约帐户 ETH 一次性转入 wallet
 // 4，众筹失败，投资者手动执行 refund()，从合约帐户中转回之前参与投资的 ETH
 // 5，众筹状态机：
 //    PreFunding:   startsAt 之前
@@ -31,15 +31,14 @@ contract Token {
 }
 
 contract Crowdsale is SafeMath {
-//contract Crowdsale is SafeMath, ERC20 {
 
-    bool public isCrowdsale = false;
     uint256 public startsAt;
     uint256 public endsAt;
     uint256 public minFundingGoalInWei = 7500 * 10**18;
     uint256 public maxFundingGoalInWei = 100000 * 10**18;
+    uint256 public maxTokenSold = 65000000 * 10**18; // 1亿 * 65%
 
-    Token public waltonToken;
+    Token public token;
     address public wallet;
     address public owner;
     mapping (address => uint256) public weiAmountOf;
@@ -47,71 +46,118 @@ contract Crowdsale is SafeMath {
     uint256 public tokensSold = 0;
     uint256 public investorCount = 0;
     uint256 public weiRefunded = 0;
+    uint256 public finalPrice;
 
     enum State{PreFunding, Funding, Success, Failure}
     bool public finalizedCrowdfunding = false;
 
-    address public multiSigWallet;
+    address public wallet;
 
     // yangfeng: indexed 有什么作用？
-    event Invested(address indexed investor, uint256 weiAmount);
+    event Invest(address indexed investor, uint256 weiAmount);
     event Refund(address indexed investor, uint256 weiAmount);
     //event EndsAtChanged(uint256 endsAt);
 
-    function Crowdsale(
-        address _multiSigWallet,
-        uint256 _startsAt,
-        uint256 _endsAt
-    ) {
-        if (   _multiSigWallet == 0
+    modifier atState(State _state) {
+        if (state != getState())
+            throw;
+        _;
+    }
+
+    modifier isOwner() {
+        if (msg.sender != owner)
+            throw;
+        _;
+    }
+
+    modifier isWallet() {
+        if (msg.sender != wallet)
+            throw;
+        _;
+    }
+
+    modifier isValidPayload() {
+        if (msg.data.length != 4 && msg.data.length != 36)
+            throw;
+        _;
+    }
+
+    function Crowdsale ( address _wallet, uint256 _startsAt, uint256 _endsAt)
+        public
+    {
+        if (   _wallet == 0
             || _startsAt <= block.timestamp
             || _endsAt <= _startsAt) 
             throw;
-        isCrowdsale = true;
-        multiSigWallet = _multiSigWallet;
+
+        owner = msg.sender;
+        wallet = _wallet;
         startsAt = _startsAt;
         endsAt = _endsAt;
-        if (!MultiSigWallet(multiSigWallet).isMultiSigWallet()) throw;
     }
 
-    function setMultiSigWallet(address newWallet) 
-        external 
+    function setWallet(address _wallet) 
+        public
+        isWallet
+        atState(State.PreFunding)
     {
-        if (msg.sender != multiSigWallet) throw;
-        MultiSigWallet wallet = MultiSigWallet(newWallet);
-        if (!wallet.isMultiSigWallet()) throw;
-        multiSigWallet = newWallet;
+        if (_wallet == 0) throw;
+        wallet = _wallet;
     }
 
-    function () payable {
-        if (getState() != State.Funding) throw;
+    function setToken(address _token)
+        public
+        isOwner
+        atState(State.PreFunding)
+    {
+        if (_token == 0)
+            throw;
+        token = Token(_token);
+        if (token.balanceOf(this) != maxTokenSold)
+            throw;
+    }
 
+    function invest()
+        public
+        payable
+        atState(State.Funding)
+    {
         address investor = msg.sender;
         uint256 weiAmount = msg.value;
-        weiRaised = safeAdd(weiRaised, weiAmount);
-        if(weiRaised > maxFundingGoalInWei) {
-            weiAmount = safeSub(weiAmount, safeSub(˙));
+        uint256 maxWei = safeAdd(maxFundingGoalInWei - weiRaised);
+        if (weiAmount > maxWei) {
+            weiAmount = maxWei;
+            if (!investor.send(msg.value - weiAmount))
+                throw;
         }
-        // update investorCount, weiAmountOf, weiRaised
-        if(weiAmountOf[investor] == 0) {
-           investorCount++; // A new investor
-        }
+        if (weiAmount == 0 || !wallet.send(weiAmount))
+            throw;
         weiAmountOf[investor] = safeAdd(weiAmountOf[investor], weiAmount);
-
-        Invested(investor, weiAmount);
+        weiRaised = safeAdd(weiRaised, weiAmount);
+        if (maxWei == weiAmount)
+            finalizeCrowdfunding();
+        Invest(investor, weiAmount);
     }
 
-    function finalizeCrowdfunding() external {
-        if (getState() != State.Success) throw; // don't finalize unless we won
-        if (finalizedCrowdfunding) throw; // can't finalize twice (so sneaky!)
+    function finalizeCrowdfunding()
+        public
+        atState(State.Success)
+    {
+        if (endTime ) throw; // can't finalize twice (so sneaky!)
 
         finalizedCrowdfunding = true;
-        if (!multiSigWallet.send(this.balance)) throw;
+        if (!wallet.send(this.balance)) throw;
+
+        finalPrice = calcPrice();
+        uint soldTokens = weiRaised * 10**18 / finalPrice;
+        token.transfer(wallet, maxTokenSold - soldTokens);
+        endTime = now;
     }
 
-    function refund() external {
-        if (getState() != State.Failure) throw;
-
+    function refund()
+        external
+        atState(State.Failure)
+    {
         address receiver = msg.sender;
         uint256 weiAmount = weiAmountOf[receiver];
         if (weiAmount == 0) throw;
@@ -121,12 +167,37 @@ contract Crowdsale is SafeMath {
         if (!receiver.send(weiAmount)) throw;
     }
 
-    function getState() public constant returns (State){
-      if (finalizedCrowdfunding) return State.Success;
-      if (block.timestamp < startsAt) return State.PreFunding;
-      else if (block.timestamp <= endsAt && weiRaised < maxFundingGoalInWei) return State.Funding;
-      else if (weiRaised >= minFundingGoalInWei) return State.Success;
-      else return State.Failure;
+    function getState() 
+        public
+        constant
+        returns (State)
+    {
+        // 函数由以下变量得到目前状态，不修改变量
+        //    block.timestamp
+        //    startsAt
+        //    endTime
+        //    weiRaised
+        //    minFundingGoalInWei
+
+        // before startsAt
+        if (block.timestamp < startsAt)
+            return State.PreFunding;
+        // after startsAt
+        else {
+            // before endsAt
+            if (block.timestamp <= endsAt)
+                if (weiRaised < maxFundingGoalInWei) return State.Funding;
+                else return State.Success;
+            // after endsAt
+            else {
+                // met min goal
+                if (weiRaised >= minFundingGoalInWei)
+                    if (block.timestamp < (endTime + freezingPeriod)) return State.Success;
+                    else return State.Release;
+                // not met min reach
+                else return State.Failure
+            }
+        }
     }
 }
 
