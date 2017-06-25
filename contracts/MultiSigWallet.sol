@@ -1,12 +1,8 @@
-pragma solidity ^0.4.8;
-
+pragma solidity 0.4.11;
 
 /// @title Multisignature wallet - Allows multiple parties to agree on transactions before execution.
 /// @author Stefan George - <stefan.george@consensys.net>
 contract MultiSigWallet {
-
-    // flag to determine if address is for a real contract or not
-    bool public isMultiSigWallet = false;
 
     uint constant public MAX_OWNER_COUNT = 50;
 
@@ -35,50 +31,59 @@ contract MultiSigWallet {
     }
 
     modifier onlyWallet() {
-        if (msg.sender != address(this)) throw;
+        if (msg.sender != address(this))
+            throw;
         _;
     }
 
     modifier ownerDoesNotExist(address owner) {
-        if (isOwner[owner]) throw;
+        if (isOwner[owner])
+            throw;
         _;
     }
 
     modifier ownerExists(address owner) {
-        if (!isOwner[owner]) throw;
+        if (!isOwner[owner])
+            throw;
         _;
     }
 
     modifier transactionExists(uint transactionId) {
-        if (transactions[transactionId].destination == 0) throw;
+        if (transactions[transactionId].destination == 0)
+            throw;
         _;
     }
 
     modifier confirmed(uint transactionId, address owner) {
-        if (!confirmations[transactionId][owner]) throw;
+        if (!confirmations[transactionId][owner])
+            throw;
         _;
     }
 
     modifier notConfirmed(uint transactionId, address owner) {
-        if (confirmations[transactionId][owner]) throw;
+        if (confirmations[transactionId][owner])
+            throw;
         _;
     }
 
     modifier notExecuted(uint transactionId) {
-        if (transactions[transactionId].executed) throw;
+        if (transactions[transactionId].executed)
+            throw;
         _;
     }
 
     modifier notNull(address _address) {
-        if (_address == 0) throw;
+        if (_address == 0)
+            throw;
         _;
     }
 
     modifier validRequirement(uint ownerCount, uint _required) {
-        if (ownerCount > MAX_OWNER_COUNT) throw;
-        if (_required > ownerCount) throw;
-        if (_required == 0) throw;
-        if (ownerCount == 0) throw;
+        if (   ownerCount > MAX_OWNER_COUNT
+            || _required > ownerCount
+            || _required == 0
+            || ownerCount == 0)
+            throw;
         _;
     }
 
@@ -101,10 +106,10 @@ contract MultiSigWallet {
         validRequirement(_owners.length, _required)
     {
         for (uint i=0; i<_owners.length; i++) {
-            if (isOwner[_owners[i]] || _owners[i] == 0) throw;
+            if (isOwner[_owners[i]] || _owners[i] == 0)
+                throw;
             isOwner[_owners[i]] = true;
         }
-        isMultiSigWallet = true;
         owners = _owners;
         required = _required;
     }
@@ -144,22 +149,23 @@ contract MultiSigWallet {
 
     /// @dev Allows to replace an owner with a new owner. Transaction has to be sent by wallet.
     /// @param owner Address of owner to be replaced.
-    /// @param newOwner Address of new owner.
-    /// @param index the indx of the owner to be replaced
-    function replaceOwnerIndexed(address owner, address newOwner, uint index)
+    /// @param owner Address of new owner.
+    function replaceOwner(address owner, address newOwner)
         public
         onlyWallet
         ownerExists(owner)
         ownerDoesNotExist(newOwner)
     {
-        if (owners[index] != owner) throw;
-        owners[index] = newOwner;
+        for (uint i=0; i<owners.length; i++)
+            if (owners[i] == owner) {
+                owners[i] = newOwner;
+                break;
+            }
         isOwner[owner] = false;
         isOwner[newOwner] = true;
         OwnerRemoval(owner);
         OwnerAddition(newOwner);
     }
-
 
     /// @dev Allows to change the number of required confirmations. Transaction has to be sent by wallet.
     /// @param _required Number of required confirmations.
@@ -210,6 +216,24 @@ contract MultiSigWallet {
         Revocation(msg.sender, transactionId);
     }
 
+    /// @dev Allows anyone to execute a confirmed transaction.
+    /// @param transactionId Transaction ID.
+    function executeTransaction(uint transactionId)
+        public
+        notExecuted(transactionId)
+    {
+        if (isConfirmed(transactionId)) {
+            Transaction tx = transactions[transactionId];
+            tx.executed = true;
+            if (tx.destination.call.value(tx.value)(tx.data))
+                Execution(transactionId);
+            else {
+                ExecutionFailure(transactionId);
+                tx.executed = false;
+            }
+        }
+    }
+
     /// @dev Returns the confirmation status of a transaction.
     /// @param transactionId Transaction ID.
     /// @return Confirmation status.
@@ -230,25 +254,6 @@ contract MultiSigWallet {
     /*
      * Internal functions
      */
-
-    /// @dev Allows anyone to execute a confirmed transaction.
-    /// @param transactionId Transaction ID.
-    function executeTransaction(uint transactionId)
-       internal
-       notExecuted(transactionId)
-    {
-        if (isConfirmed(transactionId)) {
-            Transaction tx = transactions[transactionId];
-            tx.executed = true;
-            if (tx.destination.call.value(tx.value)(tx.data))
-                Execution(transactionId);
-            else {
-                ExecutionFailure(transactionId);
-                tx.executed = false;
-            }
-        }
-    }
-
     /// @dev Adds a new transaction to the transaction mapping, if transaction does not exist yet.
     /// @param destination Transaction target address.
     /// @param value Transaction ether value.
@@ -296,8 +301,8 @@ contract MultiSigWallet {
         returns (uint count)
     {
         for (uint i=0; i<transactionCount; i++)
-            if ((pending && !transactions[i].executed) ||
-                (executed && transactions[i].executed))
+            if (   pending && !transactions[i].executed
+                || executed && transactions[i].executed)
                 count += 1;
     }
 
@@ -347,8 +352,8 @@ contract MultiSigWallet {
         uint count = 0;
         uint i;
         for (i=0; i<transactionCount; i++)
-          if ((pending && !transactions[i].executed) ||
-              (executed && transactions[i].executed))
+            if (   pending && !transactions[i].executed
+                || executed && transactions[i].executed)
             {
                 transactionIdsTemp[count] = i;
                 count += 1;
@@ -359,3 +364,97 @@ contract MultiSigWallet {
     }
 }
 
+
+/// @title Multisignature wallet with daily limit - Allows an owner to withdraw a daily limit without multisig.
+/// @author Stefan George - <stefan.george@consensys.net>
+contract MultiSigWalletWithDailyLimit is MultiSigWallet {
+
+    event DailyLimitChange(uint dailyLimit);
+
+    uint public dailyLimit;
+    uint public lastDay;
+    uint public spentToday;
+
+    /*
+     * Public functions
+     */
+    /// @dev Contract constructor sets initial owners, required number of confirmations and daily withdraw limit.
+    /// @param _owners List of initial owners.
+    /// @param _required Number of required confirmations.
+    /// @param _dailyLimit Amount in wei, which can be withdrawn without confirmations on a daily basis.
+    function MultiSigWalletWithDailyLimit(address[] _owners, uint _required, uint _dailyLimit)
+        public
+        MultiSigWallet(_owners, _required)
+    {
+        dailyLimit = _dailyLimit;
+    }
+
+    /// @dev Allows to change the daily limit. Transaction has to be sent by wallet.
+    /// @param _dailyLimit Amount in wei.
+    function changeDailyLimit(uint _dailyLimit)
+        public
+        onlyWallet
+    {
+        dailyLimit = _dailyLimit;
+        DailyLimitChange(_dailyLimit);
+    }
+
+    /// @dev Allows anyone to execute a confirmed transaction or ether withdraws until daily limit is reached.
+    /// @param transactionId Transaction ID.
+    function executeTransaction(uint transactionId)
+        public
+        notExecuted(transactionId)
+    {
+        Transaction tx = transactions[transactionId];
+        bool confirmed = isConfirmed(transactionId);
+        if (confirmed || tx.data.length == 0 && isUnderLimit(tx.value)) {
+            tx.executed = true;
+            if (!confirmed)
+                spentToday += tx.value;
+            if (tx.destination.call.value(tx.value)(tx.data))
+                Execution(transactionId);
+            else {
+                ExecutionFailure(transactionId);
+                tx.executed = false;
+                if (!confirmed)
+                    spentToday -= tx.value;
+            }
+        }
+    }
+
+    /*
+     * Internal functions
+     */
+    /// @dev Returns if amount is within daily limit and resets spentToday after one day.
+    /// @param amount Amount to withdraw.
+    /// @return Returns if amount is under daily limit.
+    function isUnderLimit(uint amount)
+        internal
+        returns (bool)
+    {
+        if (now > lastDay + 24 hours) {
+            lastDay = now;
+            spentToday = 0;
+        }
+        if (spentToday + amount > dailyLimit || spentToday + amount < spentToday)
+            return false;
+        return true;
+    }
+
+    /*
+     * Web3 call functions
+     */
+    /// @dev Returns maximum withdraw amount.
+    /// @return Returns amount.
+    function calcMaxWithdraw()
+        public
+        constant
+        returns (uint)
+    {
+        if (now > lastDay + 24 hours)
+            return dailyLimit;
+        if (dailyLimit < spentToday)
+            return 0;
+        return dailyLimit - spentToday;
+    }
+}
