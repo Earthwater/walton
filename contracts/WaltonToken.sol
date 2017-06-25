@@ -13,53 +13,7 @@ contract Token {
     event Approval(address indexed owner, address indexed spender, uint256 value);
 }
 
-contract Ownable {
-  address public owner;
-
-  function Ownable() {
-    owner = msg.sender;
-  }
-
-  modifier onlyOwner() {
-    if (msg.sender != owner) {
-      throw;
-    }
-    _;
-  }
-
-  function transferOwnership(address newOwner) onlyOwner {
-    if (newOwner != address(0)) {
-      owner = newOwner;
-    }
-  }
-
-}
-// owner 可以进行 Token 的 release 操作
-// owner 可以设置 release 白名单，即白名单帐号不锁定
-contract Releasable is Ownable {
-
-    bool public released = false;
-    mapping (address => bool) public transferAgents;
-
-    modifier canTransfer(address _sender) {
-        if(!released) {
-            if(!transferAgents[_sender]) {
-                throw;
-            }
-        }
-        _;
-    }
-
-    function setTransferAgent(address addr, bool state) onlyOwner {
-        transferAgents[addr] = state;
-    }
-
-    function releaseTokenTransfer() public onlyOwner {
-        released = true;
-    }
-}
-
-contract StandardToken is Token, Releasable {
+contract StandardToken is Token {
 
     mapping (address => uint256) balances;
     mapping (address => mapping (address => uint256)) allowed;
@@ -67,7 +21,6 @@ contract StandardToken is Token, Releasable {
 
     function transfer(address _to, uint256 _value)
         public
-        canTransfer(msg.sender)
         returns (bool)
     {
         if (balances[msg.sender] < _value) {
@@ -81,7 +34,6 @@ contract StandardToken is Token, Releasable {
 
     function transferFrom(address _from, address _to, uint256 _value)
         public
-        canTransfer(_from)
         returns (bool)
     {
         if (balances[_from] < _value || allowed[_from][msg.sender] < _value) {

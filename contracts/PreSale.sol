@@ -20,7 +20,6 @@ contract CrowdFunding {
 
     // events
     event Invest(address indexed sender, uint256 amount);
-    event UnlockTokens(address indexed receiver, uint256 tokenAmount);
     event Refund(address indexed receiver, uint256 amount);
 
     Token public token;
@@ -51,7 +50,7 @@ contract CrowdFunding {
     uint public totalEther      = 0; // total ether raised
     uint public totalToken      = 0; // total token send
     uint public etherRefunded   = 0; // total ether refunded
-    uint public tokenUnlocked   = 0; // total token unlocked
+    uint public tokenRefunded   = 0; // total token refunded
     mapping (address => uint) public etherAmountOf;
     mapping (address => uint) public tokenAmountOf;
 
@@ -70,6 +69,12 @@ contract CrowdFunding {
 
     modifier isWallet() {
         if (msg.sender != wallet)
+            throw;
+        _;
+    }
+
+    modifier isValidPayload() {
+        if (msg.data.length != 4 && msg.data.length != 36)
             throw;
         _;
     }
@@ -134,7 +139,6 @@ contract CrowdFunding {
     // yangfeng: do we need to return the state value?
     function updateState()
         public
-        isOwner
         stateTransitions
         returns (State)
     {
@@ -145,19 +149,23 @@ contract CrowdFunding {
     function()
         public
         payable
+        isValidPayload
         stateTransitions
         atState(State.FundingStarted)
     {
         address investor = msg.sender;
         uint etherAmount = msg.value;
 
-        // 1, cut etherAmount, to fit ceiling
+        // 0, cut etherAmount, to fit ceiling
         uint maxWei = ceiling - totalEther;
         if (etherAmount > maxWei) {
             etherAmount = maxWei;
             if (!investor.send(msg.value - etherAmount))
                 throw;
         }
+
+        // 1, send etherAmount to wallet
+        //if (etherAmount == 0 || !wallet.send(etherAmount))
         if (etherAmount == 0)
             throw;
 
@@ -169,45 +177,42 @@ contract CrowdFunding {
         tokenAmountOf[investor] += tokenAmount;
         totalEther += etherAmount;
         totalToken += tokenAmount;
-        if (totalToken > tokenAllocated)
-            throw;
 
         // 4, does ceiling reached?
-        if (totalEther >= ceiling)
+        if (maxWei == etherAmount)
             finalizeFunding();
         Invest(investor, etherAmount);
     }
 
-    // unlockTokens freezingDays after endTime
-    function unlockTokens()
+    // releaseTokens freezingDays after endTime
+    function releaseTokens()
         public
         stateTransitions
         atState(State.TxStarted)
     {
-        address receiver = msg.sender;
-        uint tokenAmount = tokenAmountOf[receiver];
-        if (tokenAmount == 0) throw;
-        // clear tokenAmountOf
-        tokenAmountOf[receiver] = 0;
-        tokenUnlocked += tokenAmount;
-        // send token to receiver
-        if (!token.transfer(receiver, tokenAmount)) throw;
-        UnlockTokens(receiver, tokenAmount);
+        token.releaseTokenTransfer();
     }
 
     function refund()
         public
+        payable
+        isValidPayload
         stateTransitions
         atState(State.FundingFailed)
     {
         address receiver = msg.sender;
         uint etherAmount = etherAmountOf[receiver];
+        uint tokenAmount = tokenAmountOf[receiver];
         if (etherAmount == 0) throw;
-        // clear etherAmountOf
+
         etherAmountOf[receiver] = 0;
+        tokenAmountOf[receiver] = 0;
         etherRefunded += etherAmount;
+        tokenRefunded += tokenAmount;
         // send ether back to receiver
         if (!receiver.send(etherAmount)) throw;
+        // send token back to wallet
+        if (!token.transfer(wallet, tokenAmount)) throw;
         Refund(receiver, etherAmount);
     }
 
@@ -225,7 +230,7 @@ contract CrowdFunding {
         uint price = 0;
         if (progress <= 7 days)
             price = 800;
-        else if (progress <= 14 days)
+        else if ((7 days < progress) && (progress <= 14 days))
             price = 720;
         else
             price = 640;
@@ -236,20 +241,19 @@ contract CrowdFunding {
         private
     {
         if (totalEther >= floor) {
+            // when succeed:
+            // - change state to FundingSucceed
             state = State.FundingSucceed;
-            // when succeed, send all ETH to wallet
+            // - send all ETH to wallet
             if (!wallet.send(this.balance))
                 throw;
-            // return left tokens to wallet
-            if (!token.transfer(wallet, tokenAllocated - totalToken))
-                throw;
         }
-        else {
+        else
+            // when failed:
             state = State.FundingFailed;
-            // when failed, return all tokens to wallet
-            if (!token.transfer(wallet, tokenAllocated))
-                throw;
-        }
+        // - release left tokens
+        if (!token.transfer(wallet, tokenAllocated - totalToken))
+            throw;
         endTime = now;
     }
 }
