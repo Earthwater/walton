@@ -1,0 +1,65 @@
+
+
+部署人部署：
+
+    部署 MultiSigWallet，得到多签名钱包地址 _wallet
+        输入参数：
+            _owners = [0xabc.., 0xdef.., 0xgef…]    // 多签名帐户
+            _required = 3                           // 需要的签名数
+
+    部署 Crowdfunding                               // 进入 FundingDeployed 状态
+        输入参数：
+            _wallet = 0xsdf….                       // 多签名钱包地址
+        合约中需要设置：
+            uint public startsAt = 20170708 20:00;  // 开始时间（格式为离19710101的秒数）
+            uint public fundingDays = 21;           // 众筹时间
+            uint public freezingDays = 7;           // 众筹成功后，代币锁定时间
+            uint public tokenAllocated = 40000000 * 10**18; // 官网众筹发行额度，1亿 * 40%,
+            uint public ceiling = 325000 * 10**18;  // ETH额度上限(硬顶)
+            uint public floor = 20000;              // ETH额度下限
+
+    部署 WaltonToken
+        输入参数：
+            _crowdfunding                       // 众筹合约地址
+            _owners = [0xad.., 0xcb..]          // 初始分配地址
+            _tokens = [100,200,300]             // 初始分配代码数
+
+设置：
+    Crowdfunding.setup(_token)                  // 部署人 设置 WaltonToken 合约地址，进入FundingSetUp 状态
+    Crowdfunding.changeSettings(                // wallet 修改众筹参数
+            uint _startsAt,
+            uint _fundingDays,
+            uint _freezingDays,
+            uint _maxTokensSold,
+            uint _ceilingWei,
+            uint _floorWei)
+
+众筹开始：                                      // 当时间到达 startsAt 后，第一个投资人触发进入 FundingStarted 状态
+    Crowdfunding.send(ETH)                      // 投资人 向众筹地址发送 ETH，
+        Crowdfunding.transfer(investor, WTC)    // Crowdfunding 把 WTC 转给 investor, WTC为冻结状态,不能交易
+
+分支1：成功结束情况：
+    分支1：提前成功结束情况：                   // 最后一个投资人触发提前结束情况
+        Crowdfunding.send(ETH)                  // 投资人 向Crowdfunding发送 ETH
+            investor.send(多余的 ETH)           // Crowdfunding 向投资者退回多余的 ETH
+            token.transfer(investor, WTC)       // Crowdfunding 把 WTC 转给 investor
+    分支2：按时成功结束情况，3星期后更新状态：
+        Crowdfunding.updateState()              // 众筹3星期时间后，任意节点 更新众筹状态
+    成功结束善后处理 finalizeFunding()：        // 状态变成 FundingSucceed，代币进入1星期冻结期
+        token.transfer(wallet, leftWTC)         // Crowdfunding  把众筹剩余的 WTC 转回钱包
+        wallet.send(ETH)                        // Crowdfunding 把所有筹集到的 ETH 一次性转到 wallet
+
+    释放代码：
+        Crowdfunding.releaseTokens()            // 一星期后，任意节点 通过 Crowdfunding 释放代码，开始流通
+
+分支2：失败结束情况：
+    3星期后更新状态：
+        Crowdfunding.updateState()              // 众筹3星期时间后，任意节点 更新众筹状态
+    失败结束善后处理 finalizeFunding()：        // 状态变成 FundingFailed， 投资者可以开始自行取回ETH
+        token.transfer(wallet, leftWTC)         // Crowdfunding  把众筹剩余的 WTC 转回钱包
+    投资者自行取回代币：
+        Crowdfunding.refund()                   // 投资者 从合约地址取回ETH
+            receiver.send(ETH)                  // Crowdfunding 把 ETH 转回投资者
+            token.transfer(wallet, WTC)         // Crowdfunding 把 WTC 转回 wallet
+            
+    
