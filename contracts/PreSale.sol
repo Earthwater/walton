@@ -24,7 +24,8 @@ contract PreSale {
     uint public minOnetime     = 0.01 * 10**18;   // 每笔投资的最小ETH
 
     // variables
-    uint public totalEther      = 0; // total ether raised
+    uint public totalEther     = 0; // total ether raised
+    uint public etherRefunded  = 0; // total ether raised
     mapping (address => uint) public etherAmountOf;
 
     // modifiers
