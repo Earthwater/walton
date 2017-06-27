@@ -75,16 +75,19 @@ function deploy() {
 
 function showPresale() {
     abi = [{"constant":true,"inputs":[],"name":"endsAt","outputs":[{"name":"","type":"uint256"}],"payable":false,"type":"function"},{"constant":true,"inputs":[{"name":"","type":"address"}],"name":"etherAmountOf","outputs":[{"name":"","type":"uint256"}],"payable":false,"type":"function"},{"constant":false,"inputs":[],"name":"updateState","outputs":[{"name":"","type":"uint8"}],"payable":false,"type":"function"},{"constant":false,"inputs":[],"name":"refund","outputs":[],"payable":false,"type":"function"},{"constant":true,"inputs":[],"name":"ceiling","outputs":[{"name":"","type":"uint256"}],"payable":false,"type":"function"},{"constant":true,"inputs":[],"name":"owner","outputs":[{"name":"","type":"address"}],"payable":false,"type":"function"},{"constant":false,"inputs":[{"name":"_wallet","type":"address"}],"name":"finalizePresale","outputs":[],"payable":false,"type":"function"},{"constant":false,"inputs":[],"name":"setStateToFail","outputs":[],"payable":true,"type":"function"},{"constant":false,"inputs":[{"name":"_startsAt","type":"uint256"},{"name":"_endsAt","type":"uint256"},{"name":"_ceilingWei","type":"uint256"}],"name":"changeSettings","outputs":[],"payable":false,"type":"function"},{"constant":true,"inputs":[],"name":"totalEther","outputs":[{"name":"","type":"uint256"}],"payable":false,"type":"function"},{"constant":true,"inputs":[],"name":"startsAt","outputs":[{"name":"","type":"uint256"}],"payable":false,"type":"function"},{"constant":true,"inputs":[],"name":"etherRefunded","outputs":[{"name":"","type":"uint256"}],"payable":false,"type":"function"},{"constant":true,"inputs":[],"name":"minOnetime","outputs":[{"name":"","type":"uint256"}],"payable":false,"type":"function"},{"constant":true,"inputs":[],"name":"state","outputs":[{"name":"","type":"uint8"}],"payable":false,"type":"function"},{"constant":true,"inputs":[],"name":"maxOnetime","outputs":[{"name":"","type":"uint256"}],"payable":false,"type":"function"},{"inputs":[],"payable":false,"type":"constructor"},{"payable":true,"type":"fallback"},{"anonymous":false,"inputs":[{"indexed":true,"name":"sender","type":"address"},{"indexed":false,"name":"amount","type":"uint256"}],"name":"Invest","type":"event"},{"anonymous":false,"inputs":[{"indexed":true,"name":"sender","type":"address"},{"indexed":false,"name":"amount","type":"uint256"}],"name":"Refund","type":"event"}];
-    contract = eth.contract(abi).at('0xe3b86bd00e7177ff96e47ea4478dfc28a2c432ad');        
-    contract.startsAt();
-    contract.endsAt();
-    contract.ceiling();
-    contract.etherAmountOf();
-    contract.owner();
-    contract.totalEther();
-    contract.etherRefunded();
-    contract.minOnetime();
-    contract.maxOnetime();
-    contract.state();
+    addr = '0xe3b86bd00e7177ff96e47ea4478dfc28a2c432ad';        
+    contract = eth.contract(abi).at(addr);        
+    console.log(
+        contract.startsAt(),
+        contract.endsAt(),
+        contract.ceiling(),
+        contract.etherAmountOf(),
+        contract.owner(),
+        contract.totalEther(),
+        contract.etherRefunded(),
+        contract.minOnetime(),
+        contract.maxOnetime(),
+        contract.state()
+    )
 }
 
