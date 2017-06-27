@@ -78,16 +78,16 @@ function showPresale() {
     addr = '0xe3b86bd00e7177ff96e47ea4478dfc28a2c432ad';        
     contract = eth.contract(abi).at(addr);        
     console.log(
-        contract.startsAt(),
-        contract.endsAt(),
-        contract.ceiling(),
-        contract.etherAmountOf(),
-        contract.owner(),
-        contract.totalEther(),
-        contract.etherRefunded(),
-        contract.minOnetime(),
-        contract.maxOnetime(),
-        contract.state()
+        "\n owner         is: ", contract.owner(),
+        "\n startsAt      is: ", contract.startsAt(), Date(contract.startsAt()),
+        "\n endsAt        is: ", contract.endsAt(), Date(contract.endsAt()),
+        "\n ceiling       is: ", contract.ceiling()/1e18, 'ETH',
+        "\n totalEther    is: ", contract.totalEther()/1e18, 'ETH',
+        "\n etherRefunded is: ", contract.etherRefunded()/1e18, 'ETH',
+        "\n minOnetime    is: ", contract.minOnetime()/1e18, 'ETH',
+        "\n maxOnetime    is: ", contract.maxOnetime()/1e18, 'ETH',
+        "\n state         is: ", contract.state(),
+        "\n etherAmountOf is: ", contract.etherAmountOf()
     )
 }
 
