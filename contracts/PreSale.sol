@@ -17,16 +17,17 @@ contract PreSale {
     State public state;
 
     // settings
-    uint public startsAt       = 1499515200 - 5 * 24 * 60 * 60;   // 2017-07-03 20:00
-    uint public endsAt         = 1499515200                   ;   // 2017-07-08 20:00
+    uint public startsAt       = 1499083200                   ;   // 2017-07-03 20:00
+    uint public endsAt         = 1499083200 + 5 * 24 * 60 * 60;   // 2017-07-08 20:00
     uint public ceiling        = 15000 * 10**18;  // 15000ETH
-    uint public maxOnetime     = 15000 * 10**18;  // 每笔投资的最大ETH
-    uint public minOnetime     = 0.01 * 10**18;   // 每笔投资的最小ETH
+    uint public maxOnetime     =    20 * 10**18;  // 每笔投资的最大ETH
+    uint public minOnetime     =  0.01 * 10**18;  // 每笔投资的最小ETH
 
     // variables
     uint public totalEther     = 0; // total ether raised
     uint public etherRefunded  = 0; // total ether raised
     mapping (address => uint) public etherAmountOf;
+    address public lookupList;
 
     // modifiers
     modifier atState(State _state) {
@@ -57,6 +58,17 @@ contract PreSale {
         _;
     }
 
+    function updateState()
+        public
+        isOwner
+        stateTransitions
+        returns (State)
+    {
+        return state;
+    }
+
+
+
     // functions
     function PreSale()
         public
@@ -79,21 +91,10 @@ contract PreSale {
         ceiling       = _ceilingWei;
     }
 
-    function updateState()
-        public
-        isOwner
-        stateTransitions
-        returns (State)
-    {
-        return state;
-    }
-
-
     // invest ETH
     function()
         public
         payable
-        isValidPayload
         stateTransitions
         atState(State.PresaleStarted)
     {
@@ -116,9 +117,10 @@ contract PreSale {
         if (etherAmount == 0)
             throw;
 
-        // 2, update etherAmountOf, totalEther
+        // 2, update etherAmountOf, totalEther, lookupList
         etherAmountOf[investor] += etherAmount;
         totalEther += etherAmount;
+        lookupList.push(investor);  // 此处未处理重复地址，需要注意
 
         // 3, does ceiling reached?
         if (totalEther >= ceiling)
@@ -136,6 +138,16 @@ contract PreSale {
         // - send all ETH to wallet
         if (!_wallet.send(this.balance))
             throw;
+    }
+
+    // owner可以在任意时刻，返回当前 lookupList.length
+    function getLookupLength()
+        public
+        isOwner
+        constant
+        returns(uint lookupLength)
+    {
+        return lookupList.length;
     }
 
     // 在PresaleEnded状态，owner可以设置状态为失败，同时往合约帐户存入足够的ETH，供etherAmountOf记录的投资者取回ETH

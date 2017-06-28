@@ -21,6 +21,11 @@ blockDate = new Date(web3.eth.getBlock(startBlock-maxBlocks).timestamp*1000);
 console.log("Somewhere before block #" +(startBlock-maxBlocks) +  " (block of " + blockDate.toString()
         +  ") : " + web3.toDecimal(previous));
 // ========================================================================================================
+var filter=web3.eth.filter({fromBlock: 866705, toBlock: 909023, address: contractAddress});
+filter.get(function(error, log) {
+  console.log(JSON.stringify(log));
+});
+filter.stopWatching(); 
 // ========================================================================================================
 // ========================================================================================================
 // ========================================================================================================
