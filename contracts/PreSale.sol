@@ -27,7 +27,7 @@ contract PreSale {
     uint public totalEther     = 0; // total ether raised
     uint public etherRefunded  = 0; // total ether raised
     mapping (address => uint) public etherAmountOf;
-    address public lookupList;
+    address[] public lookupList;
 
     // modifiers
     modifier atState(State _state) {
